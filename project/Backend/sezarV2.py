@@ -11,9 +11,7 @@ alfabe_buyuk = "ŞZÜKÇYIRĞJHİTVDMÖEALONBPGSUFC"
 dotenv_path = r"C:\Users\Mehme\Masaüstü\Projects\BadBoysProject\Backend\.env"
 load_dotenv(dotenv_path)
 
-MASTER_3DES_KEY = os.getenv("MASTER_3DES_KEY")
-MASTER_3DES_KEY = bytes.fromhex(MASTER_3DES_KEY)
-
+MASTER_3DES_KEY = bytes.fromhex(os.getenv("MASTER_3DES_KEY"))
 
 
 def sezar_algorithm(text, type, time = 2 ):
