@@ -32,7 +32,6 @@ def des3_encrypt(key: bytes, data: bytes) -> bytes:
     cipher = DES3.new(key, DES3.MODE_ECB)
     return cipher.encrypt(data)
 
-# 🔹 Key unwrap (padding yok)
 def des3_decrypt(key: bytes, data: bytes) -> bytes:
 
     cipher = DES3.new(key, DES3.MODE_ECB)
@@ -41,6 +40,7 @@ def des3_decrypt(key: bytes, data: bytes) -> bytes:
 # --------------------------
 # Master Key Şifresini Çöz
 # --------------------------
+
 decrypted_master_key = des3_decrypt(bytes.fromhex(oldest_dek_doc["dek"]), MASTER_3DES_KEY)
 print("Yeni çözülmüş MASTER_3DES_KEY:", decrypted_master_key.hex())
 logger(new_des_deks_id,
