@@ -6,24 +6,21 @@ from datetime import datetime
 from db_connection import client
 from logger import logger
 
-
-dotenv_path = r"C:\Users\Mehme\Masaüstü\Projects\BadBoysProject\key_rotation\.env"
-load_dotenv(dotenv_path)
-MASTER_3DES_KEY = os.getenv("MASTER_3DES_KEY")
+def get_env():
+    load_dotenv()
+    return (os.getenv("MASTER_3DES_KEY"))
 #MASTER_3DES_KEY = '420ef55580b71d9e7668df1aa77765f1345d743663f9822c'
 
 db = client["BadBoys"]
-dek_key_collection = db["3DES_DEKS"]
+dek_key_collection = db["DES3_DEKS"]
 oldest_dek_doc = dek_key_collection.find_one(sort=[("_id", -1)])
 oldest_dek_doc = oldest_dek_doc["dek"]
 #print(oldest_dek_doc)
 
 
+password_text = '1ha1v454zZ-'
 
-
-password_text = 'deneme'
-
-print('MASTER_3DES_KEY', MASTER_3DES_KEY)
+print('MASTER_3DES_KEY', get_env())
 print('DEK_KEY', oldest_dek_doc)
 
 def des3_algorithm(text, master_key, dek_key) -> bytes:
@@ -58,4 +55,5 @@ def des3_encrypt_master_key(master_key_hex: str, dek_key_hex: str) -> str:
 
 #print(des3_encrypt_master_key(MASTER_3DES_KEY, DEK_KEY))
 
-print(des3_algorithm(password_text, MASTER_3DES_KEY, oldest_dek_doc))
+print(des3_algorithm(password_text, get_env(), oldest_dek_doc))
+

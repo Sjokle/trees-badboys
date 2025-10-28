@@ -6,7 +6,7 @@ def logger(ID=None, stepcode= None, stepname=None, message=None):
 
     try:
         db = client["BadBoys"]
-        db["3DES_DEKS_LOGS"].insert_one({
+        db["DES3_DEKS_LOGS"].insert_one({
             "3DES_DEKS_ID": ID,
             "stepcode": stepcode,
             "stepname": stepname,

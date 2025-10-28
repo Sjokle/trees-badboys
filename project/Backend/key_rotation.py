@@ -3,7 +3,6 @@ from datetime import datetime
 from dotenv import set_key, find_dotenv, dotenv_values
 from Crypto.Cipher import DES3
 from db_connection import client
-from logger import logger
 
 # =============================
 #  CONFIGURATION
@@ -34,6 +33,27 @@ def insert_dek(collection, dek_hex, dek_id):
         "3DES_DEK_ID": dek_id
     }
     collection.insert_one(dek_doc)
+
+def deactivate_old_dek(collection, dek_id):
+    """Eski aktif DEK kaydını pasif hale getirir."""
+    collection.update_one(
+        {"3DES_DEK_ID": dek_id},
+        {"$set": {"status": "P", "rotate_date": datetime.now()}}
+    )
+
+
+def logger(collection, ID=None, stepcode= None, stepname=None, message=None):
+
+    try:
+        db = client["BadBoys"]
+        db["DES3_DEKS_LOGS"].insert_one({
+            "3DES_DEKS_ID": ID,
+            "stepcode": stepcode,
+            "stepname": stepname,
+            "message": message
+        })
+    except Exception as e:
+        print("Logger hatası:", e)
 
 # =============================
 #  ENCRYPTION UTILITIES
@@ -67,6 +87,7 @@ def update_env_master_key(new_key_hex: str):
     print(".env dosyası güncellendi: MASTER_3DES_KEY")
 
 
+
 # =============================
 #  ROTATION PROCESS
 # =============================
@@ -75,6 +96,7 @@ def rotate_master_key():
     """Master key rotasyon işlemini gerçekleştirir."""
     db = client[DB_NAME]
     dek_col = db[DEK_COLLECTION]
+    log_col = db[DEK_LOG_COLLECTION]
     
     # En son DEK'i getir
     latest_dek = get_latest_dek(dek_col)
@@ -84,13 +106,13 @@ def rotate_master_key():
     master_key = get_master_key()
     print("Mevcut MASTER_3DES_KEY:", master_key.hex())
 
-    logger(new_dek_id, 1, "Başlangıç", f"Eski DEK alındı. MASTER_3DES_KEY alındı.")
+    logger(log_col, new_dek_id, 1, "Başlangıç", f"{new_dek_id-1} id'li Eski DEK alındı. MASTER_3DES_KEY alındı.")
 
     # 2️⃣ MASTER KEY çöz
     decrypted_master = des3_decrypt(bytes.fromhex(latest_dek["dek"]), master_key)
     print("Çözülmüş MASTER_3DES_KEY:", decrypted_master.hex())
 
-    logger(new_dek_id, 2, "Master Key Şifresini Çöz", f"Ham Master Key: {decrypted_master.hex()}")
+    logger(log_col, new_dek_id, 2, "Master Key Şifresini Çöz", f"Ham Master Key: {decrypted_master.hex()[-3:]}")
 
     # 3️⃣ Yeni DEK oluştur
     new_dek = os.urandom(24)
@@ -101,18 +123,24 @@ def rotate_master_key():
 
     print("Yeni şifrelenmiş MASTER_3DES_KEY:", encrypted_master_hex)
 
-    logger(new_dek_id, 3, "Master Key Şifrele",
-           f"Master key şifrelendi. Yeni DEK: {new_dek.hex()}")
+    logger(log_col, new_dek_id, 3, "Master Key Şifrele",
+           f"Master key şifrelendi. Yeni DEK: {new_dek.hex()[-3:]}")
 
     # 5️⃣ Yeni master key'i .env'ye yaz
     update_env_master_key(encrypted_master_hex)
-    logger(new_dek_id, 4, "Şifrelenmiş Master Keyi yaz", f"Yeni Master Key .env dosyasına yazıldı.")
+    logger(log_col, new_dek_id, 4, "Şifrelenmiş Master Keyi yaz", "Yeni Master Key .env dosyasına yazıldı.")
 
     # 6️⃣ Yeni DEK loglarını kaydet
     insert_dek(dek_col, new_dek.hex(), new_dek_id)
 
     print("DEK ve encrypted MASTER key başarıyla kaydedildi.")
-    logger(new_dek_id, 5, "Tamamlandı", "Master key rotasyonu başarıyla tamamlandı.")
+    logger(log_col, new_dek_id, 5, "Master Key Rotasyonunu Tamamla.", "Master key rotasyonu başarıyla tamamlandı.")
+
+    # Eski dek kayıdını pasife al.
+    deactivate_old_dek(dek_col, new_dek_id-1)
+    
+    print(f"{new_dek_id-1} id'li Eski DEK kayıdı pasife alındı.")
+    logger(log_col, new_dek_id, 5, "Tamamlandı", f"{new_dek_id-1} id'li Eski DEK kayıdı pasife alındı.")
 
     return encrypted_master_hex, new_dek.hex()
 
