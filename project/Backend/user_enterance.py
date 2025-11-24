@@ -1,8 +1,9 @@
 from db_connection import client
-from datetime import datetime
 from sezarV2 import to_hash
 from system_utilities import system_handshake, ResultCode
-from core import email_validator, password_validator
+from core import email_validator, password_validator, now_ts
+from bruteforce_handler import bruteforce_protector
+import hmac
 
 
 def user_add(username, password, salt=None, email=None):
@@ -18,8 +19,8 @@ def user_add(username, password, salt=None, email=None):
             "email": email,
             "password_hash": result["data"]["cipher_text"],
             "salt": result["data"]["salt"],
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": now_ts(),
+            "updated_at": now_ts(),
             "last_login": None,
             "is_active": True,
             "is_verified": False,
@@ -41,6 +42,9 @@ def user_add(username, password, salt=None, email=None):
 
 def user_add_check(username, password, password_again, email=None):
     try:
+        
+        if not username:
+            return system_handshake(ResultCode.INFO, 'Lütfen Bir Kullanıcı Adı Girin.')
 
         if len(username) < 10:
             return system_handshake(ResultCode.INFO, 'Kullanıcı Adı En Az 10 karakterden oluşmalıdır.')
@@ -48,43 +52,59 @@ def user_add_check(username, password, password_again, email=None):
         if password != password_again:
             return system_handshake(ResultCode.INFO, 'Girilen Şifreler Eşleşmiyor.')
 
-        if password_validator(password)["code"] == ResultCode.FAIL:
-            return system_handshake(ResultCode.INFO, 'Girilen Şifre şifreleme standartlarına uygun değildir.')
+        password_result = password_validator(password)
+        if password_result["code"] != ResultCode.SUCCESS:
+            return password_result
 
-        if email != '' and email_validator(email)["code"] == ResultCode.FAIL:
-            return system_handshake(ResultCode.INFO, 'Geçersiz Email girildi.')
+        if email != None: 
+            if email_validator(email)["code"] == ResultCode.FAIL:
+                return system_handshake(ResultCode.INFO, 'Geçersiz Email girildi.')
         
         db = client["BadBoys"]
         user = db["users"]
 
         if user.find_one({"username": username}):
-                return system_handshake(ResultCode.INFO, 'Kullanıcı adı daha önceden alınmıştır.')
+            return system_handshake(ResultCode.INFO, 'Kullanıcı adı daha önceden alınmıştır.')
 
         return user_add(username, password, email=email)
-
 
     except Exception as e:
         return system_handshake(ResultCode.ERROR, error_message=str(e), function_name="user_enterance/user_add_check")
 
 
-def user_exists(username, password):
+def user_exists(username, password, ip):
     try:
+        
+        protector = bruteforce_protector()
+
+
+        if not username:
+            protector.logon_fail(ip=ip)
+            return system_handshake(ResultCode.INFO, 'Kullanıcı Adı veya Şifre yanlış')
+        
+        res = protector.bruteforce_check(username=username, ip=ip)
+        
+        if res['code'] != ResultCode.SUCCESS:
+            protector.logon_fail(username=username, ip=ip)
+            return res
+        
         db = client["BadBoys"]
         user = db["users"].find_one({"username": username})
         
         if not user:
-            return system_handshake(ResultCode.INFO, 'Kullanıcı Adı veya Şifre yanlış')
+            protector.logon_fail(ip=ip)
+            return system_handshake(ResultCode.INFO, "Kullanıcı Adı veya Şifre yanlış ")
 
         salt_bytes = bytes.fromhex(user.get('salt'))
-
         result = to_hash(password, salt_bytes)
 
-        if result["data"]["cipher_text"] == user.get('password_hash'):
-            return system_handshake(ResultCode.SUCCESS, 'Kullanıcı Girişi Başarılı')
+        if hmac.compare_digest(result["data"]["cipher_text"], user.get('password_hash')):    
+            
+            return protector.logon_success(username=username, ip=ip)
+
         else:
-            return system_handshake(ResultCode.INFO, 'Kullanıcı Adı veya Şifre yanlış')
+            
+            return protector.logon_fail(username=username, ip=ip)
         
     except Exception as e:  
         return system_handshake(ResultCode.ERROR, error_message=str(e), function_name="user_enterance/user_exists")    
-
-
